@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pagamentos Médicos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="logo.jpeg">
+  <link rel="stylesheet" href="style.css" />
+  <!-- Chart.js para o Dashboard -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="logo.jpeg" alt="Logo" class="logo">
+      <h1>Pagamentos Médicos</h1>
+    </div>
+    <nav class="tabs">
+      <button data-tab="tab-lancamento" class="tab active">Lançamento</button>
+      <button data-tab="tab-relatorio" class="tab">Relatório</button>
+      <button data-tab="tab-pix" class="tab">Chaves PIX</button>
+      <button data-tab="tab-repasses" class="tab">Repasses</button>
+      <button data-tab="tab-dashboard" class="tab">Dashboard</button>
+    </nav>
+    <div class="userbox">
+      <span id="todayLabel"></span>
+      <button id="logoutBtn" class="btn-outline">Sair</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Lançamento -->
+    <section id="tab-lancamento" class="tab-pane active">
+      <h2>Lançamento de Pagamento</h2>
+
+      <div class="grid grid-4">
+        <div class="field">
+          <label>Médico</label>
+          <select id="lan_medico"></select>
+        </div>
+        <div class="field">
+          <label>Especialidade</label>
+          <input id="lan_especialidade" type="text" disabled>
+        </div>
+        <div class="field">
+          <label>Chave PIX (auto)</label>
+          <input id="lan_chavepix" type="text" disabled>
+        </div>
+        <div class="field">
+          <label>Data</label>
+          <input id="lan_data" type="date">
+        </div>
+      </div>
+
+      <div class="grid grid-4">
+        <div class="field">
+          <label>Forma de Pagamento</label>
+          <select id="lan_forma">
+            <option>PIX</option>
+            <option>DINHEIRO</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select id="lan_status">
+            <option>NÃO PAGO</option>
+            <option>LANÇADO</option>
+            <option>PAGO</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Qtd Consultas (pode ser 0)</label>
+          <input id="lan_qtdconsultas" type="number" min="0" value="0">
+        </div>
+        <div class="field">
+          <label>Observação</label>
+          <input id="lan_obs" type="text" placeholder="Ex.: plantão, extra, etc.">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Itens do Lançamento</h3>
+          <button id="addItemBtn" class="btn-primary">Adicionar Item</button>
+        </div>
+        <div class="responsive">
+          <table class="table" id="itensTable">
+            <thead>
+              <tr>
+                <th>Indicador</th>
+                <th>Item</th>
+                <th>Repasse (R$)</th>
+                <th>Qtd</th>
+                <th>Subtotal (R$)</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody><!-- linhas dinâmicas --></tbody>
+          </table>
+        </div>
+        <div class="totals">
+          <div><strong>Total Itens:</strong> <span id="totalItens">R$ 0,00</span></div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="salvarLancamentoBtn" class="btn-success">Lançar</button>
+        <button id="limparFormBtn" class="btn-outline">Limpar</button>
+      </div>
+
+      <h3 class="mt">Lançamentos de Hoje</h3>
+      <div class="responsive">
+        <table class="table" id="lancamentosHojeTable">
+          <thead>
+            <tr>
+              <th>Hora</th>
+              <th>Médico</th>
+              <th>Espec.</th>
+              <th>Forma</th>
+              <th>Status</th>
+              <th>Qtd Cons.</th>
+              <th>Valor (R$)</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody><!-- dinâmico --></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Relatório -->
+    <section id="tab-relatorio" class="tab-pane">
+      <h2>Relatório de Lançamentos</h2>
+      <div class="grid grid-4">
+        <div class="field">
+          <label>De</label>
+          <input type="date" id="rel_de">
+        </div>
+        <div class="field">
+          <label>Até</label>
+          <input type="date" id="rel_ate">
+        </div>
+        <div class="field">
+          <label>Médico</label>
+          <select id="rel_medico"></select>
+        </div>
+        <div class="field">
+          <label>Especialidade</label>
+          <select id="rel_especialidade"></select>
+        </div>
+      </div>
+      <div class="grid grid-4">
+        <div class="field">
+          <label>Forma</label>
+          <select id="rel_forma">
+            <option value="">(todas)</option>
+            <option>PIX</option>
+            <option>DINHEIRO</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Indicador</label>
+          <select id="rel_indicador">
+            <option value="">(todos)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select id="rel_status">
+            <option value="">(todos)</option>
+            <option>NÃO PAGO</option>
+            <option>LANÇADO</option>
+            <option>PAGO</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <div class="flex">
+            <button id="rel_buscar" class="btn-primary">Buscar</button>
+            <button id="rel_exportar" class="btn-outline">Exportar CSV</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="responsive">
+        <table class="table" id="rel_table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Médico</th>
+              <th>Espec.</th>
+              <th>Forma</th>
+              <th>Status</th>
+              <th>Indicadores/Itens</th>
+              <th>Valor (R$)</th>
+            </tr>
+          </thead>
+          <tbody><!-- dinâmico --></tbody>
+        </table>
+      </div>
+      <div class="totals">
+        <div><strong>Total:</strong> <span id="rel_total">R$ 0,00</span></div>
+      </div>
+    </section>
+
+    <!-- Chaves PIX -->
+    <section id="tab-pix" class="tab-pane">
+      <h2>Chaves PIX</h2>
+      <div class="grid grid-3">
+        <div class="field">
+          <label>Médico</label>
+          <select id="pix_medico"></select>
+        </div>
+        <div class="field">
+          <label>Chave PIX</label>
+          <input type="text" id="pix_chave" placeholder="CPF, e-mail, telefone ou aleatória">
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <div class="flex">
+            <button id="pix_salvar" class="btn-success">Salvar</button>
+            <button id="pix_limpar" class="btn-outline">Limpar</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="responsive">
+        <table class="table" id="pix_table">
+          <thead>
+            <tr>
+              <th>Médico</th>
+              <th>Especialidade</th>
+              <th>Chave PIX</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody><!-- dinâmico --></tbody>
+        </table>
+      </div>
+    </section>
+
+<!-- Repasses -->
+<section id="tab-repasses" class="tab-pane">
+  <h2>Configurar Repasses por Médico</h2>
+
+  <div class="card">
+    <div class="card-header">
+      <h3>Novo Médico</h3>
+    </div>
+    <div class="grid grid-3">
+      <div class="field">
+        <label>Nome</label>
+        <input type="text" id="dr_nome" placeholder="Dr(a). Fulano(a)">
+      </div>
+      <div class="field">
+        <label>Especialidade</label>
+        <input type="text" id="dr_especialidade" placeholder="Ex.: Cardiologia">
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button id="dr_adicionar" class="btn-primary">Adicionar Médico</button>
+      </div>
+    </div>
+  </div>
+
+
+
+  <div class="card">
+    <div class="card-header">
+      <h3>Tabela de Repasses (por Indicador/Item)</h3>
+      <div class="flex">
+        <select id="rep_medico_select"></select>
+        <button id="rep_toggle_add" class="btn-outline">+ Adicionar Item</button>
+      </div>
+    </div>
+
+    <!-- filtros para a TABELA (Indicador/Item) -->
+    <div class="grid grid-3" style="padding:12px 14px;">
+      <div class="field">
+        <label>Filtrar por Indicador</label>
+        <input type="text" id="rep_filter_indicador" placeholder="ex.: PROCEDIMENTO">
+      </div>
+      <div class="field">
+        <label>Filtrar por Item</label>
+        <input type="text" id="rep_filter_item" placeholder="ex.: Gesso">
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <button id="rep_filtrar_tabela" class="btn-outline">Filtrar Tabela</button>
+      </div>
+    </div>
+
+    <!-- Painel de novo item (editar/novo) -->
+    <div id="rep_new_item_panel" class="card-section hidden">
+      <div class="grid grid-4">
+        <div class="field">
+          <label>Indicador</label>
+          <select id="new_indicador"></select>
+        </div>
+        <div class="field">
+          <label>Se "OUTRO...", qual?</label>
+          <input type="text" id="new_indicador_custom" placeholder="Ex.: AJUDA DE CUSTO">
+        </div>
+        <div class="field">
+          <label>Item</label>
+          <input type="text" id="new_item_nome" placeholder="Ex.: Raio-X, Gesso...">
+        </div>
+        <div class="field">
+          <label>Repasse (R$)</label>
+          <input type="text" id="new_item_valor" inputmode="decimal" placeholder="ex.: 80,00">
+        </div>
+      </div>
+
+      <div class="grid grid-3">
+        <div class="field">
+          <label>Aplicar para</label>
+          <select id="new_aplicar">
+            <option value="medico">Médico selecionado</option>
+            <option value="todos">Todos os médicos</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button id="new_item_salvar" class="btn-success">Salvar Item</button>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button id="new_item_cancelar" class="btn-outline">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="responsive">
+      <table class="table" id="rep_table">
+        <thead>
+          <tr>
+            <th>Indicador</th>
+            <th>Item</th>
+            <th>Repasse (R$)</th>
+            <th style="text-align:right">Ações</th>
+          </tr>
+        </thead>
+        <tbody><!-- dinâmico --></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+
+
+    <!-- Dashboard -->
+    <section id="tab-dashboard" class="tab-pane">
+      <h2>Dashboard</h2>
+
+      <div class="grid grid-3">
+        <div class="card">
+          <div class="card-header"><h3>Totais por Forma (Hoje)</h3></div>
+          <canvas id="chartForma"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>Totais por Especialidade (Hoje)</h3></div>
+          <canvas id="chartEspecialidade"></canvas>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3>Totais por Médico (Hoje)</h3></div>
+          <canvas id="chartMedico"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>Últimos 7 dias</h3></div>
+        <canvas id="chartSemana"></canvas>
+      </div>
+    </section>
+  </main>
+
+<script>
+const API_BASE = 'api/index.php';
+
+async function api(action, method='GET', data=null, query={}) {
+  const q = new URLSearchParams({ action, ...query }).toString();
+  const opts = { method, headers: { 'Content-Type':'application/json' } };
+  if (data) opts.body = JSON.stringify(data);
+  const res = await fetch(`${API_BASE}?${q}`, opts);
+  if (!res.ok) throw new Error(`API ${action}: ${res.status}`);
+  return res.json();
+}
+
+// Doctors
+const apiDoctors = {
+  list: () => api('doctors.list'),
+  create: (nome, especialidade) => api('doctors.create','POST',{nome,especialidade}),
+};
+
+// PIX
+const apiPix = {
+  all: () => api('pix.get'),
+  set: (doctor_id, chave) => api('pix.set','POST',{doctor_id,chave}),
+  clear: (doctor_id) => api('pix.clear','POST',{doctor_id}),
+};
+
+// Catálogo/Itens e Repasses
+const apiCatalog = {
+  get: () => api('catalog.get'),
+  add: (indicador, item, valor, aplicar, doctor_id) =>
+    api('catalog.add','POST',{indicador,item,valor,aplicar,doctor_id}),
+  edit: (old_indic,old_item,new_indic,new_item,valor)=>
+    api('catalog.edit','POST',{old_indic,old_item,new_indic,new_item,valor}),
+  del: (indicador,item)=> api('catalog.delete','POST',{indicador,item}),
+};
+const apiRepasses = {
+  byDoctor: (doctor_id) => api('repasses.byDoctor','GET',null,{doctor_id}),
+  set: (doctor_id,item_id,valor) => api('repasses.set','POST',{doctor_id,item_id,valor}),
+};
+
+// Lançamentos
+const apiLanc = {
+  create: (payload) => api('lanc.create','POST',payload),
+  updateStatus: (id,status) => api('lanc.updateStatus','POST',{id,status}),
+  delete: (id) => api('lanc.delete','POST',{id}),
+  list: (filters)=> api('lanc.list','GET',null,filters||{}),
+};
+</script>
+
+    
+  <script src="script.js"></script>
+  <script>
+    // Proteção simples de rota
+    if (!sessionStorage.getItem('pagmedico_logado')) {
+      window.location.href = 'login.html';
+    }
+  </script>
+</body>
+</html>

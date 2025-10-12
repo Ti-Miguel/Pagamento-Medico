@@ -1,0 +1,98 @@
+:root{
+  --primary:#61c1d0; /* azul */
+  --accent:#d53e36;  /* vermelho */
+  --bg:#f5f7fa;
+  --text:#1f2937;
+  --muted:#6b7280;
+  --border:#e5e7eb;
+  --white:#fff;
+  --success:#00b03e;
+}
+
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif;color:var(--text);background:var(--bg);}
+
+.topbar{
+  position:sticky;top:0;z-index:10;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;background:var(--white);border-bottom:1px solid var(--border);
+}
+.brand{display:flex;align-items:center;gap:10px;}
+.logo{width:36px;height:36px;border-radius:8px;object-fit:cover;border:2px solid var(--primary);}
+.brand h1{font-size:18px;margin:0;}
+
+.tabs{display:flex;gap:8px;flex-wrap:wrap}
+.tab{border:1px solid var(--border);background:#fff;padding:8px 12px;border-radius:8px;cursor:pointer}
+.tab.active{border-color:var(--primary);color:#fff;background:linear-gradient(135deg,var(--primary),var(--accent));}
+
+.userbox{display:flex;align-items:center;gap:8px;}
+#todayLabel{color:var(--muted);font-size:13px;}
+
+.container{max-width:1200px;margin:18px auto;padding:0 16px;}
+.tab-pane{display:none;}
+.tab-pane.active{display:block;}
+
+h2{margin:8px 0 12px;}
+h3{margin:0;}
+
+.grid{display:grid;gap:12px;margin-bottom:12px;}
+.grid-3{grid-template-columns:repeat(3,1fr);}
+.grid-4{grid-template-columns:repeat(4,1fr);}
+@media (max-width:900px){.grid-4,.grid-3{grid-template-columns:1fr 1fr}}
+@media (max-width:600px){.grid-4,.grid-3{grid-template-columns:1fr}}
+
+.field label{display:block;margin-bottom:6px;font-weight:600}
+.field input,.field select{
+  width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;background:#fff;
+}
+
+.card{background:#fff;border:1px solid var(--border);border-radius:14px;overflow:hidden;margin:12px 0;}
+.card-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,#fff,#fafafa);}
+.responsive{overflow:auto;}
+.table{width:100%;border-collapse:collapse;}
+.table th,.table td{border-bottom:1px solid var(--border);padding:10px 8px;text-align:left;white-space:nowrap;}
+.table th{background:#fafafa;}
+.table td:last-child{text-align:right;}
+
+.btn-primary,.btn-success,.btn-outline{
+  padding:10px 14px;border-radius:10px;border:1px solid transparent;cursor:pointer;font-weight:600;
+}
+.btn-primary{background:var(--primary);color:#fff;border-color:var(--primary);}
+.btn-success{background:var(--success);color:#fff;border-color:var(--success);}
+.btn-outline{background:#fff;border-color:var(--border);color:var(--text);}
+
+.actions{display:flex;gap:8px;margin:10px 0;}
+.totals{display:flex;justify-content:flex-end;padding:10px 12px;gap:18px;}
+
+.mt{margin-top:18px;}
+.flex{display:flex;gap:8px;align-items:center;}
+
+.muted{color:var(--muted);font-size:13px;}
+
+/* Login */
+.login-body{display:grid;place-items:center;min-height:100vh;background:
+  radial-gradient(1200px 600px at -10% -10%, rgba(97,193,208,.15), transparent),
+  radial-gradient(900px 500px at 110% 10%, rgba(213,62,54,.12), transparent),
+  var(--bg);
+}
+.login-card{width:100%;max-width:420px;background:#fff;border:1px solid var(--border);border-radius:16px;padding:18px;}
+.login-header{display:flex;gap:12px;align-items:center;margin-bottom:12px;}
+.login-header h1{margin:0}
+.login-form label{font-weight:600;margin-top:8px;display:block;}
+.login-form input{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;margin-top:6px;margin-bottom:8px;}
+
+/* Espaço interno nas seções dentro de cards */
+.card .grid { padding: 12px 14px; }   /* resolve "Nome" colado na borda */
+
+/* Seções ocultáveis */
+.card-section.hidden { display: none; }
+.card-section { border-top: 1px solid var(--border); }
+
+/* Alinhamento de ações na tabela */
+#rep_table td:last-child, 
+#catalog_report_table td:last-child { text-align: right; }
+
+.card .grid { padding: 12px 14px; }  /* afasta campos da borda */
+.card-section.hidden { display: none; }
+.card-section { border-top: 1px solid var(--border); }
+
