@@ -19,7 +19,7 @@ function parseDateFlex(s){
     const [y,m,d] = s.split('-').map(Number);
     return new Date(y, m-1, d);
   }
-  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { // BR
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) { // BRf
     const [d,m,y] = s.split('/').map(Number);
     return new Date(y, m-1, d);
   }
@@ -44,7 +44,7 @@ const CACHE = {
   doctors: [],
   catalog: {},
   catKey2Id: {},
-  repassesByDoctor: {}, // doctorId -> {map,idMap}
+  repassesByDoctor: {}, // doctorId -> { map, idMap }
 };
 
 /* ===== Estado de edição ===== */
@@ -115,6 +115,11 @@ function setupTopbar(){
 ======================= */
 function doctorById(id){ return CACHE.doctors.find(d=> String(d.id)===String(id)); }
 
+/** Helper para pegar a data hoje/selecionada no topo do lançamento */
+function currentLancDateISO(){
+  return (document.getElementById('lan_data')?.value) || todayISO();
+}
+
 async function setupLancamento(){
   const selMed = document.getElementById('lan_medico');
   const inpEsp = document.getElementById('lan_especialidade');
@@ -127,6 +132,9 @@ async function setupLancamento(){
   // preencher médicos
   fillMedicosSelect(selMed, CACHE.doctors);
   inpData.value = todayISO();
+
+  // quando trocar a data no topo → recarrega a lista do dia selecionado
+  inpData.addEventListener('change', ()=> renderLancamentosDia(inpData.value));
 
   // ao trocar médico, carrega repasses desse médico
   selMed.addEventListener('change', async ()=>{
@@ -150,7 +158,8 @@ async function setupLancamento(){
   document.getElementById('limparFormBtn')?.addEventListener('click', ()=> { itensTbody.innerHTML=''; updateTotal(); });
   document.getElementById('salvarLancamentoBtn')?.addEventListener('click', salvarLancamento);
 
-  await renderLancamentosHoje();
+  // carrega a lista do dia selecionado (inicialmente hoje)
+  await renderLancamentosDia(inpData.value);
 }
 
 function fillMedicosSelect(selectEl, list){
@@ -293,14 +302,16 @@ async function salvarLancamento(){
   // se estava editando, apaga o antigo
   await finalizarEdicaoSeNecessario(created?.id);
 
-  await renderLancamentosHoje();
+  // recarrega a lista do dia atualmente escolhido
+  await renderLancamentosDia(currentLancDateISO());
 }
 
-async function renderLancamentosHoje(){
+/** NOVO: render da tabela “Lançamentos do dia” para a data escolhida */
+async function renderLancamentosDia(dateISO){
   const tbody = document.querySelector('#lancamentosHojeTable tbody');
   if (!tbody) return;
-  const hoje = todayISO();
-  const arr = await apiLanc.list({ de:hoje, ate:hoje });
+  const dia = dateISO || currentLancDateISO();
+  const arr = await apiLanc.list({ de: dia, ate: dia });
 
   tbody.innerHTML = arr.map(l=>{
     return `
@@ -325,10 +336,11 @@ async function renderLancamentosHoje(){
     `;
   }).join('');
 
+  // Ações
   tbody.querySelectorAll('.btn-del').forEach(btn=>{
     btn.onclick = async ()=>{
       await apiLanc.delete(btn.dataset.id);
-      await renderLancamentosHoje();
+      await renderLancamentosDia(dia);
     };
   });
   tbody.querySelectorAll('.btn-print').forEach(btn=>{
@@ -416,7 +428,8 @@ async function finalizarEdicaoSeNecessario(){
   EDITING_LANC_ID = null;
   const saveBtn = document.getElementById('salvarLancamentoBtn');
   if (saveBtn) saveBtn.textContent = 'Salvar Lançamento';
-  await renderLancamentosHoje();
+  // manter a lista no dia atual escolhido
+  await renderLancamentosDia(currentLancDateISO());
 }
 
 async function imprimirRecibo(id){
@@ -527,22 +540,16 @@ async function renderRelatorio(){
   if (!table) return;
   const tbody = table.querySelector('tbody');
 
-  // pega tudo da API e filtra aqui
-  const all = await apiLanc.list({}); // SEM filtros no backend
+  const all = await apiLanc.list({});
   const f = readRelFilters();
 
   const arr = all.filter(l=>{
-    // data
     const d = parseDateFlex(l.data);
     if (!inRange(d, f.de, f.ate)) return false;
-
-    // demais filtros (se preenchidos)
     if (f.doctor_id && String(l.doctor_id) !== String(f.doctor_id)) return false;
     if (f.especialidade && l.especialidade !== f.especialidade) return false;
     if (f.forma && l.forma !== f.forma) return false;
     if (f.status && l.status !== f.status) return false;
-
-    // indicador: precisa existir pelo menos um item com esse indicador
     if (f.indicador) {
       const ok = (l.itens||[]).some(i => i.indicador === f.indicador);
       if (!ok) return false;
@@ -551,19 +558,27 @@ async function renderRelatorio(){
   });
 
   if (!arr.length){
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#777;padding:12px">Nenhum lançamento encontrado para os filtros selecionados.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#777;padding:12px">Nenhum lançamento encontrado para os filtros selecionados.</td></tr>`;
     const totalSpan = document.getElementById('rel_total');
     if (totalSpan) totalSpan.textContent = BRL(0);
+    const totalConsSpan = document.getElementById('rel_total_consultas');
+    if (totalConsSpan) totalConsSpan.textContent = 0;
     return;
   }
 
-  let total=0;
+  let totalPagamentos = 0;
+  let totalConsultas  = 0;
+
   tbody.innerHTML = arr.map(l=>{
     const linhasHTML = (l.itens||[]).map(i=>{
       const val = BRL(i.subtotal || (i.repasse||0) * (i.qtd||0));
       return `${val} — ${i.indicador}: ${i.item} x${i.qtd}`;
     }).join('<br>');
-    total += Number(l.valor_total||0);
+
+    // soma com conversão robusta
+    totalPagamentos += Number(l.valor_total || 0);
+    totalConsultas  += parseInt(String(l.qtd_consultas ?? 0), 10) || 0;
+
     return `
       <tr>
         <td>${fmtDate(l.data)}</td>
@@ -571,15 +586,22 @@ async function renderRelatorio(){
         <td>${l.especialidade}</td>
         <td>${l.forma}</td>
         <td>${l.status}</td>
+        <td>${l.qtd_consultas ?? 0}</td>
         <td>${linhasHTML}</td>
         <td>${BRL(l.valor_total||0)}</td>
       </tr>
     `;
   }).join('');
 
+  // atualiza os totais do rodapé
   const totalSpan = document.getElementById('rel_total');
-  if (totalSpan) totalSpan.textContent = BRL(total);
+  if (totalSpan) totalSpan.textContent = BRL(totalPagamentos);
+
+  const totalConsSpan = document.getElementById('rel_total_consultas');
+  if (totalConsSpan) totalConsSpan.textContent = String(totalConsultas);
 }
+
+
 
 function readRelFilters(){
   const rawDe  = (document.getElementById('rel_de') || {}).value || '';
@@ -595,8 +617,6 @@ function readRelFilters(){
   };
   return f;
 }
-
-
 
 async function exportarCSV(){
   const all = await apiLanc.list({});
@@ -616,8 +636,14 @@ async function exportarCSV(){
     return true;
   });
 
-  const rows = [['Data','Médico','Especialidade','Forma','Status','Indicador','Item','Qtd','Valor Unitário','Subtotal','Valor Total (lançamento)']];
+  const rows = [[
+    'Data','Médico','Especialidade','Forma','Status',
+    'Qtd Consultas',                           // ← incluída
+    'Indicador','Item','Qtd','Valor Unitário','Subtotal','Valor Total (lançamento)'
+  ]];
+
   arr.forEach(l=>{
+    const qtdCons = parseInt(String(l.qtd_consultas ?? 0), 10) || 0; // ← robusto
     (l.itens||[]).forEach(i=>{
       const valUnit = Number(i.repasse||0);
       const subtotal = Number(i.subtotal || (i.repasse||0) * (i.qtd||0));
@@ -627,6 +653,7 @@ async function exportarCSV(){
         l.especialidade,
         l.forma,
         l.status,
+        qtdCons,                                  // ← vai para o CSV
         i.indicador,
         i.item,
         Number(i.qtd||0),
@@ -645,6 +672,7 @@ async function exportarCSV(){
   document.body.appendChild(a); a.click(); document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
 
 
 /* =======================
