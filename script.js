@@ -734,25 +734,22 @@ function setupRepasses(){
     await apiDoctors.create(nome, esp);
     await preloadDoctors();
 
-    document.getElementById('dr_nome').value='';
-    document.getElementById('dr_especialidade').value='';
+    // limpar e atualizar seletores dependentes
+    const n = document.getElementById('dr_nome'); if(n) n.value = '';
+    const e = document.getElementById('dr_especialidade'); if(e) e.value = '';
     fillMedicosSelect(document.getElementById('lan_medico'), CACHE.doctors);
     refreshRepasseMedicoSelect();
     refreshPixMedicoSelect();
+
     await renderRepasseTable();
     await renderPixTable();
     alert('Médico adicionado!');
   });
 
-  document.getElementById('rep_aplicar_filtro')?.addEventListener('click', ()=>{
-    refreshRepasseMedicoSelect();
-    renderRepasseTable();
-  });
-
+  // sempre que trocar o médico, recarrega a tabela de repasses dele
   document.getElementById('rep_medico_select')?.addEventListener('change', renderRepasseTable);
-  document.getElementById('rep_filtrar_tabela')?.addEventListener('click', renderRepasseTable);
 
-  // painel novo item
+  // painel novo item (permanece igual – para cadastrar item + valor)
   document.getElementById('rep_toggle_add')?.addEventListener('click', toggleNewItemPanel);
   document.getElementById('new_item_cancelar')?.addEventListener('click', toggleNewItemPanel);
   document.getElementById('new_item_salvar')?.addEventListener('click', saveNewCatalogItem);
@@ -762,17 +759,15 @@ function setupRepasses(){
   prepareNewItemIndicators();
 }
 
+
 function refreshRepasseMedicoSelect(){
   const sel = document.getElementById('rep_medico_select');
   if (!sel) return;
-  const nomeFiltro = (document.getElementById('rep_filter_nome')?.value||'').toLowerCase();
-  const especFiltro = (document.getElementById('rep_filter_espec')?.value||'').toLowerCase();
-  const docs = CACHE.doctors.filter(d=>
-    (!nomeFiltro || d.nome.toLowerCase().includes(nomeFiltro)) &&
-    (!especFiltro || d.especialidade.toLowerCase().includes(especFiltro))
-  );
-  sel.innerHTML = docs.map(d=> `<option value="${d.id}">${d.nome} — ${d.especialidade}</option>`).join('');
+  sel.innerHTML = CACHE.doctors
+    .map(d=> `<option value="${d.id}">${d.nome} — ${d.especialidade}</option>`)
+    .join('');
 }
+
 
 function toggleNewItemPanel(){
   const panel = document.getElementById('rep_new_item_panel');
@@ -827,65 +822,63 @@ async function saveNewCatalogItem(){
 }
 
 async function renderRepasseTable(){
-  const sel = document.getElementById('rep_medico_select');
+  const sel   = document.getElementById('rep_medico_select');
   const table = document.getElementById('rep_table');
   if (!sel || !table) return;
+
   const tbody = table.querySelector('tbody');
   const medId = sel.value;
+  if (!medId){
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#777;padding:12px">Selecione um médico.</td></tr>`;
+    return;
+  }
 
-  const filtroIndic = (document.getElementById('rep_filter_indicador')||{}).value?.trim().toLowerCase() || '';
-  const filtroItem  = (document.getElementById('rep_filter_item')||{}).value?.trim().toLowerCase() || '';
+  // busca direta do backend, mostrando apenas repasses cadastrados (> 0)
+  const rows = await apiRepasses.byDoctor(medId);
+  const filtrados = rows.filter(r => Number(r.valor || 0) > 0);
 
-  await ensureRepasses(medId);
-  const repData = CACHE.repassesByDoctor[medId];
+  if (!filtrados.length){
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center;color:#777;padding:12px">Nenhum repasse configurado para este médico.</td></tr>`;
+    return;
+  }
 
-  let rows = [];
-  Object.entries(CACHE.catalog).forEach(([indic, itens])=>{
-    itens.forEach(obj=>{
-      const item = obj.nome;
-      const key = `${indic}|${item}`;
-      const val = repData.map[key] ?? 0;
-      rows.push({indic,item,key,val});
-    });
-  });
-
-  if (filtroIndic) rows = rows.filter(r=> r.indic.toLowerCase().includes(filtroIndic));
-  if (filtroItem)  rows = rows.filter(r=> r.item.toLowerCase().includes(filtroItem));
-
-  tbody.innerHTML = rows.map(r=> `
+  tbody.innerHTML = filtrados.map(r => `
     <tr>
-      <td>${r.indic}</td>
+      <td>${r.indicador}</td>
       <td>${r.item}</td>
-      <td class="rep_val_text" data-key="${r.key}">${BRL(r.val)}</td>
-      <td>
-        <button class="btn-outline rep_edit" data-indic="${r.indic}" data-item="${r.item}" data-val="${Number(r.val)}">Editar</button>
-        <button class="btn-outline rep_delete" data-key="${r.key}">Excluir</button>
+      <td>${BRL(r.valor)}</td>
+      <td style="text-align:right;">
+        <button class="btn-outline rep_edit" 
+          data-indic="${r.indicador}" 
+          data-item="${r.item}" 
+          data-val="${Number(r.valor)}">Editar</button>
+        <button class="btn-outline rep_delete" 
+          data-itemid="${r.item_id}" 
+          data-indic="${r.indicador}" 
+          data-item="${r.item}">Remover</button>
       </td>
     </tr>
   `).join('');
 
-  // excluir item (catálogo + repasses)
+  // botão de remover (zera o valor do repasse)
   tbody.querySelectorAll('.rep_delete').forEach(btn=>{
     btn.onclick = async ()=>{
-      const [indic,item] = btn.dataset.key.split('|');
-      if (!confirm(`Excluir o item "${item}" do indicador "${indic}" para TODOS?`)) return;
-      await apiCatalog.del(indic, item);
-      await preloadCatalog();
-      delete CACHE.repassesByDoctor[medId];
-      await renderRepasseTable();
+      const itemId = btn.dataset.itemid;
+      if (!itemId) return alert('Item inválido.');
+      if (!confirm(`Remover repasse de "${btn.dataset.item}" (${btn.dataset.indic}) deste médico?`)) return;
+      await apiRepasses.set(medId, itemId, 0);
+      await renderRepasseTable(); // recarrega a tabela
     };
   });
 
-  // editar → abre o painel com os dados preenchidos
+  // botão de editar → abre painel de edição
   tbody.querySelectorAll('.rep_edit').forEach(btn=>{
     btn.onclick = ()=>{
       const panel = document.getElementById('rep_new_item_panel');
       if (!panel) return;
       panel.classList.remove('hidden');
-
       prepareNewItemIndicators();
 
-      // garante que o indicador corrente estará disponível e selecionado
       const indSel = document.getElementById('new_indicador');
       if (indSel) {
         const current = btn.dataset.indic || '';
@@ -907,6 +900,7 @@ async function renderRepasseTable(){
         saveBtn.textContent = 'Salvar Item';
         saveBtn.onclick = saveNewCatalogItem;
       };
+
       saveBtn.textContent = 'Salvar Alteração';
       saveBtn.onclick = async ()=>{
         const indic = (document.getElementById('new_indicador')||{}).value || '';
@@ -915,8 +909,6 @@ async function renderRepasseTable(){
         if (!indic || !item) return alert('Preencha todos os campos.');
 
         await apiCatalog.edit(btn.dataset.indic, btn.dataset.item, indic, item, valor);
-        await preloadCatalog();
-        delete CACHE.repassesByDoctor[medId];
         await renderRepasseTable();
         panel.classList.add('hidden');
         restore();
