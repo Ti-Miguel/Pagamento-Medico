@@ -158,23 +158,22 @@ if ($action==='catalog.delete'){
 if ($action==='repasses.byDoctor'){
   $doctor = intval($_GET['doctor_id'] ?? 0);
   if (!$doctor) bad('missing_doctor');
-  $sql = "SELECT ind.nome as indicador, it.id as item_id, it.nome as item,
-                 IFNULL(r.valor,0) as valor
-          FROM items it 
-            JOIN indicators ind ON ind.id=it.indicator_id
-            LEFT JOIN repasses r ON r.item_id=it.id AND r.doctor_id=?
+
+  // Somente repasses realmente cadastrados para o médico (valor > 0)
+  $sql = "SELECT ind.nome AS indicador,
+                 it.id      AS item_id,
+                 it.nome    AS item,
+                 r.valor    AS valor
+          FROM repasses r
+          JOIN items it       ON it.id = r.item_id
+          JOIN indicators ind ON ind.id = it.indicator_id
+          WHERE r.doctor_id = ? AND r.valor > 0
           ORDER BY ind.nome, it.nome";
-  $st = $pdo->prepare($sql); $st->execute([$doctor]);
+  $st = $pdo->prepare($sql);
+  $st->execute([$doctor]);
   ok($st->fetchAll());
 }
-if ($action==='repasses.set'){
-  $in = jread(); // doctor_id, item_id, valor
-  if (empty($in['doctor_id']) || empty($in['item_id'])) bad('missing_fields');
-  $st = $pdo->prepare("INSERT INTO repasses (doctor_id,item_id,valor) VALUES (?,?,?)
-                       ON DUPLICATE KEY UPDATE valor=VALUES(valor)");
-  $st->execute([intval($in['doctor_id']), intval($in['item_id']), floatval($in['valor'] ?? 0)]);
-  ok(['ok'=>true]);
-}
+
 
 // --------- LANÇAMENTOS ----------
 if ($action==='lanc.create'){

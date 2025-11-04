@@ -276,45 +276,34 @@
 
     <!-- 🔹 filtros antigos removidos daqui -->
 
-    <!-- Painel de novo item (editar/novo) -->
-    <div id="rep_new_item_panel" class="card-section hidden">
-      <div class="grid grid-4">
-        <div class="field">
-          <label>Indicador</label>
-          <select id="new_indicador"></select>
-        </div>
-        <div class="field">
-          <label>Se "OUTRO...", qual?</label>
-          <input type="text" id="new_indicador_custom" placeholder="Ex.: AJUDA DE CUSTO">
-        </div>
-        <div class="field">
-          <label>Item</label>
-          <input type="text" id="new_item_nome" placeholder="Ex.: Raio-X, Gesso...">
-        </div>
-        <div class="field">
-          <label>Repasse (R$)</label>
-          <input type="text" id="new_item_valor" inputmode="decimal" placeholder="ex.: 80,00">
-        </div>
-      </div>
 
-      <div class="grid grid-3">
-        <div class="field">
-          <label>Aplicar para</label>
-          <select id="new_aplicar">
-            <option value="medico">Médico selecionado</option>
-            <option value="todos">Todos os médicos</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <button id="new_item_salvar" class="btn-success">Salvar Item</button>
-        </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <button id="new_item_cancelar" class="btn-outline">Cancelar</button>
-        </div>
-      </div>
+<!-- Painel de novo item (editar/novo) -->
+<div id="rep_new_item_panel" class="card-section hidden">
+  <div class="grid grid-4">
+    <div class="field">
+      <label>Indicador</label>
+      <select id="new_indicador"></select>
     </div>
+    <div class="field">
+      <label>Se "OUTRO...", qual?</label>
+      <input type="text" id="new_indicador_custom" placeholder="Ex.: AJUDA DE CUSTO">
+    </div>
+    <div class="field">
+      <label>Item</label>
+      <input type="text" id="new_item_nome" placeholder="Ex.: Raio-X, Gesso...">
+    </div>
+    <div class="field">
+      <label>Repasse (R$)</label>
+      <input type="text" id="new_item_valor" inputmode="decimal" placeholder="ex.: 80,00">
+    </div>
+  </div>
+
+  <div class="row gap" style="padding: 0 14px 12px;">
+    <button id="new_item_salvar" class="btn-success">Salvar Item</button>
+    <button id="new_item_cancelar" class="btn-outline">Cancelar</button>
+  </div>
+</div>
+
 
     <div class="responsive">
       <table class="table" id="rep_table">

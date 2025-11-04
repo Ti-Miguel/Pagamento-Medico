@@ -154,13 +154,82 @@ async function setupLancamento(){
   });
   selMed.dispatchEvent(new Event('change'));
 
-  document.getElementById('addItemBtn')?.addEventListener('click', ()=> addItemRow(itensTbody));
+  document.getElementById('addItemBtn')?.addEventListener('click', addItemRowFiltered);
   document.getElementById('limparFormBtn')?.addEventListener('click', ()=> { itensTbody.innerHTML=''; updateTotal(); });
   document.getElementById('salvarLancamentoBtn')?.addEventListener('click', salvarLancamento);
 
   // carrega a lista do dia selecionado (inicialmente hoje)
   await renderLancamentosDia(inpData.value);
 }
+
+async function addItemRowFiltered(){
+  const tbody = document.querySelector('#itensTable tbody');
+  if (!tbody) return;
+
+  const medicoId = document.getElementById('lan_medico')?.value;
+  if (!medicoId) {
+    alert('Selecione um médico antes de adicionar itens.');
+    return;
+  }
+
+  // busca apenas os repasses cadastrados (valor > 0)
+  const rows = await apiRepasses.byDoctor(medicoId);
+  const filtrados = rows.filter(r => Number(r.valor || 0) > 0);
+
+  // agrupa apenas indicadores com ao menos 1 item
+  const itensPorIndicador = {};
+  filtrados.forEach(r => {
+    if (!itensPorIndicador[r.indicador]) itensPorIndicador[r.indicador] = [];
+    itensPorIndicador[r.indicador].push(r.item);
+  });
+
+  // 🔹 mantém só indicadores com itens realmente cadastrados
+  const indicadoresValidos = Object.entries(itensPorIndicador)
+    .filter(([_, itens]) => itens.length > 0)
+    .map(([indicador]) => indicador);
+
+  if (!indicadoresValidos.length) {
+    alert('Este médico ainda não possui repasses cadastrados.');
+    return;
+  }
+
+  // cria a linha
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><select class="row_indicador"></select></td>
+    <td><select class="row_item"></select></td>
+    <td><input type="text" class="row_repasse" inputmode="decimal"></td>
+    <td><input type="number" class="row_qtd" min="1" value="1"></td>
+    <td class="row_subtotal">R$ 0,00</td>
+    <td><button class="btn-outline btn-del">Excluir</button></td>
+  `;
+  tbody.appendChild(tr);
+
+  const selIndic = tr.querySelector('.row_indicador');
+  const selItem  = tr.querySelector('.row_item');
+  const repInput = tr.querySelector('.row_repasse');
+  const qtdInput = tr.querySelector('.row_qtd');
+
+  // 🔹 popula apenas os indicadores válidos
+  selIndic.innerHTML = indicadoresValidos.map(i => `<option>${i}</option>`).join('');
+
+  function loadItems(){
+    const indicador = selIndic.value;
+    const itens = itensPorIndicador[indicador] || [];
+    selItem.innerHTML = itens.map(i => `<option>${i}</option>`).join('');
+    applyRepasseFromConfigOnRow(tr); // mantém valor automático
+  }
+
+  selIndic.addEventListener('change', loadItems);
+  selItem.addEventListener('change', ()=>{ applyRepasseFromConfigOnRow(tr); });
+  repInput.addEventListener('input', ()=>{ recomputeRow(tr); updateTotal(); });
+  qtdInput.addEventListener('input', ()=>{ recomputeRow(tr); updateTotal(); });
+  tr.querySelector('.btn-del').addEventListener('click', ()=>{ tr.remove(); updateTotal(); });
+
+  // inicializa o primeiro
+  loadItems();
+}
+
 
 function fillMedicosSelect(selectEl, list){
   if (!selectEl) return;
@@ -180,44 +249,7 @@ async function ensureRepasses(doctorId){
   CACHE.repassesByDoctor[doctorId] = { map, idMap };
 }
 
-function addItemRow(tbody){
-  const indicadores = Object.keys(CACHE.catalog);
-  const tr = document.createElement('tr');
-  tr.innerHTML = `
-    <td>
-      <select class="row_indicador">
-        ${indicadores.map(i=>`<option>${i}</option>`).join('')}
-      </select>
-    </td>
-    <td>
-      <select class="row_item"></select>
-    </td>
-    <td><input type="text" class="row_repasse" inputmode="decimal"></td>
-    <td><input type="number" class="row_qtd" min="1" value="1"></td>
-    <td class="row_subtotal">R$ 0,00</td>
-    <td><button class="btn-outline btn-del">Excluir</button></td>
-  `;
-  tbody.appendChild(tr);
 
-  const selIndic = tr.querySelector('.row_indicador');
-  const selItem  = tr.querySelector('.row_item');
-  const repInput = tr.querySelector('.row_repasse');
-  const qtdInput = tr.querySelector('.row_qtd');
-
-  function loadItems(){
-    const itens = CACHE.catalog[selIndic.value] || [];
-    selItem.innerHTML = itens.map(i=>`<option>${i.nome}</option>`).join('');
-    applyRepasseFromConfigOnRow(tr);
-  }
-
-  selIndic.addEventListener('change', loadItems);
-  selItem.addEventListener('change', ()=>{ applyRepasseFromConfigOnRow(tr); });
-  repInput.addEventListener('input', ()=>{ recomputeRow(tr); updateTotal(); });
-  qtdInput.addEventListener('input', ()=>{ recomputeRow(tr); updateTotal(); });
-  tr.querySelector('.btn-del').addEventListener('click', ()=>{ tr.remove(); updateTotal(); });
-
-  loadItems();
-}
 
 function applyRepasseFromConfigOnRow(tr){
   const repInput = tr.querySelector('.row_repasse');
@@ -794,32 +826,36 @@ function prepareNewItemIndicators(){
   const c = document.getElementById('new_indicador_custom'); if (c) c.value = '';
   const n = document.getElementById('new_item_nome');        if (n) n.value = '';
   const v = document.getElementById('new_item_valor');       if (v) v.value = '';
-  const a = document.getElementById('new_aplicar');          if (a) a.value = 'medico';
 }
 
 async function saveNewCatalogItem(){
   const selIndic = (document.getElementById('new_indicador')||{}).value;
-  const indic = (selIndic==='OUTRO'
+  const indicador = (selIndic === 'OUTRO'
     ? (document.getElementById('new_indicador_custom')||{}).value?.trim().toUpperCase()
     : selIndic);
+
   const item  = (document.getElementById('new_item_nome')||{}).value?.trim();
   const repV  = parseMoney((document.getElementById('new_item_valor')||{}).value || '');
-  const aplicar  = (document.getElementById('new_aplicar')||{}).value || 'medico';
+
+  // SEMPRE aplicar ao médico selecionado
   const doctorId = (document.getElementById('rep_medico_select')||{}).value;
 
-  if (!indic) return alert('Informe o indicador.');
-  if (!item)  return alert('Informe o item.');
-  if (repV<0) return alert('Informe um repasse válido.');
-  if (aplicar==='medico' && !doctorId) return alert('Selecione um médico na lista acima.');
+  if (!indicador) return alert('Informe o indicador.');
+  if (!item)      return alert('Informe o item.');
+  if (repV < 0)   return alert('Informe um repasse válido.');
+  if (!doctorId)  return alert('Selecione um médico (acima) para aplicar o repasse.');
 
-  await apiCatalog.add(indic, item, repV, aplicar, doctorId || null);
-  await preloadCatalog(); // atualiza catKey2Id
-  if (doctorId) delete CACHE.repassesByDoctor[doctorId]; // força recarregar repasses do médico
+  await apiCatalog.add(indicador, item, repV, 'medico', doctorId);
 
+  // recarrega cat/repasses e tabela
+  await preloadCatalog();
+  delete CACHE.repassesByDoctor[doctorId];
   await renderRepasseTable();
+
   toggleNewItemPanel();
-  alert('Item cadastrado com sucesso!');
+  alert('Item cadastrado para o médico selecionado!');
 }
+
 
 async function renderRepasseTable(){
   const sel   = document.getElementById('rep_medico_select');
