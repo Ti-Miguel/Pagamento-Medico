@@ -857,6 +857,7 @@ async function saveNewCatalogItem(){
 }
 
 
+// === SUBSTITUA a função inteira por esta versão ===
 async function renderRepasseTable(){
   const sel   = document.getElementById('rep_medico_select');
   const table = document.getElementById('rep_table');
@@ -869,8 +870,9 @@ async function renderRepasseTable(){
     return;
   }
 
-  // busca direta do backend, mostrando apenas repasses cadastrados (> 0)
+  // Busca do backend só os repasses do médico
   const rows = await apiRepasses.byDoctor(medId);
+  // Mantém somente valores > 0
   const filtrados = rows.filter(r => Number(r.valor || 0) > 0);
 
   if (!filtrados.length){
@@ -878,74 +880,87 @@ async function renderRepasseTable(){
     return;
   }
 
+  // Monta tabela com data-* necessários
   tbody.innerHTML = filtrados.map(r => `
     <tr>
       <td>${r.indicador}</td>
       <td>${r.item}</td>
-      <td>${BRL(r.valor)}</td>
+      <td class="rep_val_text">${BRL(r.valor)}</td>
       <td style="text-align:right;">
-        <button class="btn-outline rep_edit" 
-          data-indic="${r.indicador}" 
-          data-item="${r.item}" 
+        <button class="btn-outline rep_edit"
+          data-itemid="${r.item_id}"
+          data-indic="${r.indicador}"
+          data-item="${r.item}"
           data-val="${Number(r.valor)}">Editar</button>
-        <button class="btn-outline rep_delete" 
-          data-itemid="${r.item_id}" 
-          data-indic="${r.indicador}" 
+        <button class="btn-outline rep_delete"
+          data-itemid="${r.item_id}"
+          data-indic="${r.indicador}"
           data-item="${r.item}">Remover</button>
       </td>
     </tr>
   `).join('');
 
-  // botão de remover (zera o valor do repasse)
+  // REMOVER ⇒ zera o repasse só deste médico
   tbody.querySelectorAll('.rep_delete').forEach(btn=>{
     btn.onclick = async ()=>{
       const itemId = btn.dataset.itemid;
       if (!itemId) return alert('Item inválido.');
-      if (!confirm(`Remover repasse de "${btn.dataset.item}" (${btn.dataset.indic}) deste médico?`)) return;
+
+      if (!confirm(`Remover (zerar) o repasse de "${btn.dataset.item}" (${btn.dataset.indic}) para este médico?`)) return;
       await apiRepasses.set(medId, itemId, 0);
-      await renderRepasseTable(); // recarrega a tabela
+      await renderRepasseTable(); // recarrega a lista (itens zerados somem)
     };
   });
 
-  // botão de editar → abre painel de edição
+  // EDITAR ⇒ altera apenas o valor do médico (sem mexer no catálogo global)
   tbody.querySelectorAll('.rep_edit').forEach(btn=>{
     btn.onclick = ()=>{
-      const panel = document.getElementById('rep_new_item_panel');
-      if (!panel) return;
-      panel.classList.remove('hidden');
-      prepareNewItemIndicators();
+      const itemId    = btn.dataset.itemid;
+      const indicador = btn.dataset.indic || '';
+      const itemNome  = btn.dataset.item  || '';
+      const atual     = Number(btn.dataset.val || 0);
 
-      const indSel = document.getElementById('new_indicador');
-      if (indSel) {
-        const current = btn.dataset.indic || '';
-        if (current && !Array.from(indSel.options).some(o=> o.value===current)) {
-          const opt = document.createElement('option');
-          opt.value = current; opt.textContent = current;
-          indSel.insertBefore(opt, indSel.firstChild);
-        }
-        indSel.value = current || indSel.value;
-      }
-
-      document.getElementById('new_indicador_custom').value = '';
-      document.getElementById('new_item_nome').value = btn.dataset.item || '';
-      const currentVal = Number(btn.dataset.val || 0);
-      document.getElementById('new_item_valor').value = currentVal.toFixed(2).replace('.',',');
-
+      const panel   = document.getElementById('rep_new_item_panel');
+      const selInd  = document.getElementById('new_indicador');
+      const indCust = document.getElementById('new_indicador_custom');
+      const nomeInp = document.getElementById('new_item_nome');
+      const valInp  = document.getElementById('new_item_valor');
       const saveBtn = document.getElementById('new_item_salvar');
+      const cancel  = document.getElementById('new_item_cancelar');
+
+      if (!panel || !selInd || !nomeInp || !valInp || !saveBtn || !cancel) return;
+
+      // Abre painel e trava renomeações (evita alterar catálogo global)
+      panel.classList.remove('hidden');
+      selInd.innerHTML = `<option>${indicador}</option>`;
+      if (indCust) { indCust.value = ''; indCust.disabled = true; }
+      nomeInp.value = itemNome; nomeInp.disabled = true;
+      valInp.value  = atual.toFixed(2).replace('.', ',');
+
+      // Guarda callbacks originais para restaurar depois
+      const originalText = saveBtn.textContent;
+      const originalOnClick = saveBtn.onclick;
+
       const restore = ()=>{
-        saveBtn.textContent = 'Salvar Item';
-        saveBtn.onclick = saveNewCatalogItem;
+        if (indCust) indCust.disabled = false;
+        nomeInp.disabled = false;
+        saveBtn.textContent = originalText || 'Salvar Item';
+        saveBtn.onclick = originalOnClick || saveNewCatalogItem; // volta ao "adicionar"
       };
 
+      // Reconfigura para salvar ALTERAÇÃO de valor (por médico)
       saveBtn.textContent = 'Salvar Alteração';
       saveBtn.onclick = async ()=>{
-        const indic = (document.getElementById('new_indicador')||{}).value || '';
-        const item  = (document.getElementById('new_item_nome')||{}).value?.trim() || '';
-        const valor = parseMoney((document.getElementById('new_item_valor')||{}).value || '');
-        if (!indic || !item) return alert('Preencha todos os campos.');
-
-        await apiCatalog.edit(btn.dataset.indic, btn.dataset.item, indic, item, valor);
+        const novoVal = parseMoney(valInp.value || '');
+        if (isNaN(novoVal) || novoVal < 0) return alert('Informe um valor válido.');
+        await apiRepasses.set(medId, itemId, novoVal);
         await renderRepasseTable();
+        panel.classList.add('hidden');
+        restore();
+      };
+
+      // Cancelar → fecha e restaura comportamento padrão
+      cancel.onclick = ()=>{
         panel.classList.add('hidden');
         restore();
       };

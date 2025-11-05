@@ -155,11 +155,11 @@ if ($action==='catalog.delete'){
 }
 
 // --------- REPASSES ----------
+// Lista SOMENTE repasses cadastrados (> 0) do médico
 if ($action==='repasses.byDoctor'){
   $doctor = intval($_GET['doctor_id'] ?? 0);
   if (!$doctor) bad('missing_doctor');
 
-  // Somente repasses realmente cadastrados para o médico (valor > 0)
   $sql = "SELECT ind.nome AS indicador,
                  it.id      AS item_id,
                  it.nome    AS item,
@@ -172,6 +172,21 @@ if ($action==='repasses.byDoctor'){
   $st = $pdo->prepare($sql);
   $st->execute([$doctor]);
   ok($st->fetchAll());
+}
+
+// Define/atualiza o valor do repasse para UM médico e UM item
+if ($action==='repasses.set'){
+  $in = jread(); // { doctor_id, item_id, valor }
+  if (empty($in['doctor_id']) || empty($in['item_id'])) bad('missing_fields');
+  $doctorId = intval($in['doctor_id']);
+  $itemId   = intval($in['item_id']);
+  $valor    = floatval($in['valor'] ?? 0);
+
+  $st = $pdo->prepare("INSERT INTO repasses (doctor_id,item_id,valor)
+                       VALUES (?,?,?)
+                       ON DUPLICATE KEY UPDATE valor=VALUES(valor)");
+  $st->execute([$doctorId, $itemId, $valor]);
+  ok(['ok'=>true, 'doctor_id'=>$doctorId, 'item_id'=>$itemId, 'valor'=>$valor]);
 }
 
 
