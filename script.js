@@ -567,15 +567,22 @@ function refreshRelatorioOptions(){
   }
 }
 
+
+  let REL_PAGE = 1;       // página atual
+const REL_PER_PAGE = 50; // 50 lançamentos por página
+let REL_FILTERED = [];   // cache dos resultados filtrados
+
 async function renderRelatorio(){
   const table = document.getElementById('rel_table');
   if (!table) return;
   const tbody = table.querySelector('tbody');
 
+  // busca todos da API (mantém igual)
   const all = await apiLanc.list({});
   const f = readRelFilters();
 
-  const arr = all.filter(l=>{
+  // filtra localmente
+  REL_FILTERED = all.filter(l=>{
     const d = parseDateFlex(l.data);
     if (!inRange(d, f.de, f.ate)) return false;
     if (f.doctor_id && String(l.doctor_id) !== String(f.doctor_id)) return false;
@@ -589,50 +596,60 @@ async function renderRelatorio(){
     return true;
   });
 
-  if (!arr.length){
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#777;padding:12px">Nenhum lançamento encontrado para os filtros selecionados.</td></tr>`;
-    const totalSpan = document.getElementById('rel_total');
-    if (totalSpan) totalSpan.textContent = BRL(0);
-    const totalConsSpan = document.getElementById('rel_total_consultas');
-    if (totalConsSpan) totalConsSpan.textContent = 0;
-    return;
+  // calcula paginação
+  const totalPaginas = Math.ceil(REL_FILTERED.length / REL_PER_PAGE);
+  if (REL_PAGE > totalPaginas) REL_PAGE = totalPaginas || 1;
+
+  const start = (REL_PAGE - 1) * REL_PER_PAGE;
+  const end = start + REL_PER_PAGE;
+  const pageData = REL_FILTERED.slice(start, end);
+
+  // mostra dados da página atual
+  if (!pageData.length){
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#777;padding:12px">Nenhum lançamento encontrado.</td></tr>`;
+    document.getElementById('rel_total').textContent = BRL(0);
+    document.getElementById('rel_total_consultas').textContent = 0;
+  } else {
+    let total = 0, totalConsultas = 0;
+    tbody.innerHTML = pageData.map(l=>{
+      const linhasHTML = (l.itens||[]).map(i=>{
+        const val = BRL(i.subtotal || (i.repasse||0) * (i.qtd||0));
+        return `${val} — ${i.indicador}: ${i.item} x${i.qtd}`;
+      }).join('<br>');
+      total += Number(l.valor_total||0);
+      totalConsultas += Number(l.qtd_consultas||0);
+      return `
+        <tr>
+          <td>${fmtDate(l.data)}</td>
+          <td>${l.nome}</td>
+          <td>${l.especialidade}</td>
+          <td>${l.forma}</td>
+          <td>${l.status}</td>
+          <td>${l.qtd_consultas||0}</td>
+          <td>${linhasHTML}</td>
+          <td>${BRL(l.valor_total||0)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    document.getElementById('rel_total').textContent = BRL(total);
+    document.getElementById('rel_total_consultas').textContent = totalConsultas;
   }
 
-  let totalPagamentos = 0;
-  let totalConsultas  = 0;
+  // atualizar info da paginação
+  const info = document.getElementById('rel_page_info');
+  if (info) info.textContent = `Página ${REL_PAGE} de ${totalPaginas || 1}`;
 
-  tbody.innerHTML = arr.map(l=>{
-    const linhasHTML = (l.itens||[]).map(i=>{
-      const val = BRL(i.subtotal || (i.repasse||0) * (i.qtd||0));
-      return `${val} — ${i.indicador}: ${i.item} x${i.qtd}`;
-    }).join('<br>');
+  // controlar botões
+  const btnPrev = document.getElementById('rel_prev');
+  const btnNext = document.getElementById('rel_next');
+  if (btnPrev) btnPrev.disabled = (REL_PAGE <= 1);
+  if (btnNext) btnNext.disabled = (REL_PAGE >= totalPaginas);
 
-    // soma com conversão robusta
-    totalPagamentos += Number(l.valor_total || 0);
-    totalConsultas  += parseInt(String(l.qtd_consultas ?? 0), 10) || 0;
-
-    return `
-      <tr>
-        <td>${fmtDate(l.data)}</td>
-        <td>${l.nome}</td>
-        <td>${l.especialidade}</td>
-        <td>${l.forma}</td>
-        <td>${l.status}</td>
-        <td>${l.qtd_consultas ?? 0}</td>
-        <td>${linhasHTML}</td>
-        <td>${BRL(l.valor_total||0)}</td>
-      </tr>
-    `;
-  }).join('');
-
-  // atualiza os totais do rodapé
-  const totalSpan = document.getElementById('rel_total');
-  if (totalSpan) totalSpan.textContent = BRL(totalPagamentos);
-
-  const totalConsSpan = document.getElementById('rel_total_consultas');
-  if (totalConsSpan) totalConsSpan.textContent = String(totalConsultas);
+  // listeners
+  if (btnPrev) btnPrev.onclick = ()=>{ if (REL_PAGE > 1){ REL_PAGE--; renderRelatorio(); } };
+  if (btnNext) btnNext.onclick = ()=>{ if (REL_PAGE < totalPaginas){ REL_PAGE++; renderRelatorio(); } };
 }
-
 
 
 function readRelFilters(){
@@ -651,6 +668,8 @@ function readRelFilters(){
 }
 
 async function exportarCSV(){
+    const dataToExport = REL_FILTERED?.length ? REL_FILTERED : await apiLanc.list({});
+
   const all = await apiLanc.list({});
   const f = readRelFilters();
 
